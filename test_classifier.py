@@ -1,4 +1,5 @@
 from agents.classifier import classify_events
+from ingestion.buffer import get_error_events
 
 
 NORMAL_EVENTS = [
@@ -124,6 +125,20 @@ def main() -> None:
 
     for name, events in tests:
         print_result(name, events)
+
+    print(f"\n{'=' * 60}")
+    print("TEST: Live buffer (last 30s of error events)")
+    print(f"{'=' * 60}")
+
+    live_events = get_error_events(since_seconds=30)
+    if live_events:
+        result = classify_events(live_events)
+        print(f"  is_incident   : {result.is_incident}")
+        print(f"  incident_type : {result.incident_type}")
+        print(f"  severity      : {result.severity}")
+        print(f"  summary       : {result.summary}")
+    else:
+        print("  No error events in the last 30 seconds - run log_generator.py first")
 
 
 if __name__ == "__main__":
