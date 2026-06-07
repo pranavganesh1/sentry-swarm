@@ -110,3 +110,29 @@ def get_error_rate(since_seconds: int = 30) -> float:
     if total == 0:
         return 0.0
     return round(errors / total * 100, 2)
+
+
+def get_events_by_type(incident_type: str, since_seconds: int = 60) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT * FROM events
+        WHERE incident_type = ?
+        AND datetime(timestamp) >= datetime('now', ? || ' seconds')
+        ORDER BY id ASC
+    """, (incident_type, f"-{since_seconds}")).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_recent_events_mixed(since_seconds: int = 30) -> list[dict[str, Any]]:
+    """Returns both normal and error events for the classifier to see full context."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT * FROM events
+        WHERE datetime(timestamp) >= datetime('now', ? || ' seconds')
+        ORDER BY id ASC
+    """, (f"-{since_seconds}",)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
