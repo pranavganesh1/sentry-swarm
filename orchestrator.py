@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 import logging
 import queue
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from agents.comms import CommsAgent
-from agents.diagnostician import DiagnosticianAgent
-from agents.fix_planner import FixPlannerAgent
-from agents.sentry import SentryAgent, SentryTrigger
 from metrics import get_summary, record_incident
 from state import IncidentState
+
+if TYPE_CHECKING:
+    from agents.sentry import SentryTrigger
 
 
 logger = logging.getLogger("orchestrator")
@@ -38,12 +39,31 @@ class IncidentOrchestrator:
         self._sentry_thread: threading.Thread | None = None
         self._agent_timeout_seconds = agent_timeout_seconds
 
-        self.sentry = sentry or SentryAgent(on_incident=self._enqueue)
-        if sentry is not None:
-            self.sentry.on_incident = self._enqueue
-        self.diagnostician = diagnostician or DiagnosticianAgent()
-        self.fix_planner = fix_planner or FixPlannerAgent()
-        self.comms = comms or CommsAgent()
+        if sentry is None:
+            from agents.sentry import SentryAgent
+
+            sentry = SentryAgent(on_incident=self._enqueue)
+        else:
+            sentry.on_incident = self._enqueue
+        self.sentry = sentry
+
+        if diagnostician is None:
+            from agents.diagnostician import DiagnosticianAgent
+
+            diagnostician = DiagnosticianAgent()
+        self.diagnostician = diagnostician
+
+        if fix_planner is None:
+            from agents.fix_planner import FixPlannerAgent
+
+            fix_planner = FixPlannerAgent()
+        self.fix_planner = fix_planner
+
+        if comms is None:
+            from agents.comms import CommsAgent
+
+            comms = CommsAgent()
+        self.comms = comms
 
         self.on_state_update: Callable[[IncidentState], None] | None = None
         self.on_incident_done: Callable[[IncidentState], None] | None = None
