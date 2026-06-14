@@ -1,14 +1,14 @@
 import unittest
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from agents.diagnostician import DiagnosticianAgent
-from agents.sentry import SentryTrigger
 
 
 class DiagnosticianTests(unittest.TestCase):
     def test_builds_incident_state_and_calculates_mttd(self) -> None:
         detected_at = datetime.now()
-        trigger = SentryTrigger(
+        trigger = SimpleNamespace(
             incident_id="incident-1",
             incident_type="oom_kill",
             severity="high",

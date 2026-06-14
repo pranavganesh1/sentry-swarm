@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from agents.sentry import SentryTrigger
 from state import IncidentState
+
+if TYPE_CHECKING:
+    from agents.sentry import SentryTrigger
 
 
 logger = logging.getLogger("diagnostician")
