@@ -6,6 +6,7 @@ import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import dashboard_rich as dash
 from metrics import get_summary, record_incident
 from state import IncidentState
 
@@ -177,26 +178,37 @@ class IncidentOrchestrator:
             trigger.incident_type,
         )
 
+        dash.open_incident(state)
+
         try:
+            # ── Diagnostician ─────────────────────────────────────────
+            dash.update_incident_step(incident_id, "diagnostician")
             state = self._run_step(
                 "diagnostician",
                 incident_id,
                 lambda: self.diagnostician.run(trigger),
             )
+            dash.update_incident_step(incident_id, "diagnostician", done=True)
             self._store_and_emit(state)
 
+            # ── Fix-Planner ───────────────────────────────────────────
+            dash.update_incident_step(incident_id, "fix_planner")
             state = self._run_step(
                 "fix_planner",
                 incident_id,
                 lambda: self.fix_planner.run(state),
             )
+            dash.update_incident_step(incident_id, "fix_planner", done=True)
             self._store_and_emit(state)
 
+            # ── Comms ─────────────────────────────────────────────────
+            dash.update_incident_step(incident_id, "comms")
             state = self._run_step(
                 "comms",
                 incident_id,
                 lambda: self.comms.run(state),
             )
+            dash.update_incident_step(incident_id, "comms", done=True)
             state.status = "resolved"
             self._store_and_emit(state)
         except Exception as error:
@@ -209,6 +221,8 @@ class IncidentOrchestrator:
             self._store_and_emit(state)
         finally:
             self._finish_incident(trigger, state)
+            if state.status == "resolved":
+                dash.close_incident(state)
 
     def _initial_state(self, trigger: SentryTrigger) -> IncidentState:
         return IncidentState(
