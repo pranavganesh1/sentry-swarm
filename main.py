@@ -1,10 +1,11 @@
 import logging
 import signal
 import sys
-import time
+import threading
 from pathlib import Path
 
 from orchestrator import IncidentOrchestrator
+import dashboard_rich as dash
 
 
 def configure_logging() -> None:
@@ -14,10 +15,7 @@ def configure_logging() -> None:
         format="%(asctime)s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
         handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(
-                "logs/orchestrator.log", encoding="utf-8"
-            ),
+            logging.FileHandler("logs/orchestrator.log", encoding="utf-8"),
         ],
     )
 
@@ -25,36 +23,20 @@ def configure_logging() -> None:
 def main() -> int:
     configure_logging()
     orchestrator = IncidentOrchestrator()
-    shutdown_requested = False
 
-    def shutdown(_signal_number, _frame) -> None:
-        nonlocal shutdown_requested
-        if shutdown_requested:
-            return
-        shutdown_requested = True
-        print("\n[main] Shutting down...")
+    def shutdown(sig, frame) -> None:
         orchestrator.stop()
+        sys.exit(0)
 
-    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGINT,  shutdown)
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, shutdown)
 
+    # start orchestrator in background thread
     orchestrator.start()
-    print("[main] Incident Response Commander running")
-    print("[main] Make sure log_generator.py and watcher.py are running")
-    print("[main] Ctrl+C to stop\n")
 
-    try:
-        while not shutdown_requested:
-            time.sleep(5)
-            active = orchestrator.get_active_incidents()
-            if active:
-                incident_ids = [
-                    incident.incident_id for incident in active
-                ]
-                print(f"[main] Active incidents: {incident_ids}")
-    finally:
-        orchestrator.stop()
+    # run Rich dashboard on main thread (blocks until Ctrl+C)
+    dash.run_dashboard()
 
     return 0
 
