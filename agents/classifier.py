@@ -65,8 +65,16 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(format_instructions=parser.get_format_instructions())
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-classifier_chain = prompt | llm | parser
+# Lazy-initialised so missing OPENAI_API_KEY doesn't crash on import
+_classifier_chain = None
+
+
+def _get_chain():
+    global _classifier_chain
+    if _classifier_chain is None:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        _classifier_chain = prompt | llm | parser
+    return _classifier_chain
 
 
 def format_log_batch(events: list[dict]) -> str:
@@ -98,4 +106,4 @@ def classify_events(events: list[dict]) -> ClassifierOutput:
         )
 
     log_batch = format_log_batch(events)
-    return classifier_chain.invoke({"log_batch": log_batch})
+    return _get_chain().invoke({"log_batch": log_batch})

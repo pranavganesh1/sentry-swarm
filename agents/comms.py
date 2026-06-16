@@ -143,9 +143,19 @@ postmortem_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(format_instructions=postmortem_parser.get_format_instructions())
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-slack_chain = slack_prompt | llm | slack_parser
-postmortem_chain = postmortem_prompt | llm | postmortem_parser
+# Lazy-initialised so missing OPENAI_API_KEY doesn't crash on import
+_llm = None
+_slack_chain = None
+_postmortem_chain = None
+
+
+def _get_chains():
+    global _llm, _slack_chain, _postmortem_chain
+    if _llm is None:
+        _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+        _slack_chain = slack_prompt | _llm | slack_parser
+        _postmortem_chain = postmortem_prompt | _llm | postmortem_parser
+    return _slack_chain, _postmortem_chain
 
 
 class CommsAgent:
@@ -170,6 +180,7 @@ class CommsAgent:
         return state
 
     def _generate_slack(self, state: IncidentState, fix_steps: str) -> SlackUpdate:
+        slack_chain, _ = _get_chains()
         return slack_chain.invoke(
             {
                 "incident_id": state.incident_id,
@@ -186,7 +197,7 @@ class CommsAgent:
         self, state: IncidentState, fix_steps: str
     ) -> PostMortem:
         duration = int((datetime.now() - state.started_at).total_seconds() / 60)
-
+        _, postmortem_chain = _get_chains()
         return postmortem_chain.invoke(
             {
                 "incident_id": state.incident_id,
