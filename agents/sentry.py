@@ -144,3 +144,11 @@ class SentryAgent:
         logger.info("[sentry]    summary: %s", trigger.summary)
 
         self.on_incident(trigger)
+    def handle_physical_event(self, raw_payload: str) -> None:
+        """Entry point for UNO Q sensor data.
+        The raw payload is expected to be a JSON string; we delegate
+        parsing to sensors.ingest_payload which returns a PhysicalTrigger.
+        """
+        from sensors import ingest_payload
+        trigger = ingest_payload(raw_payload)
+        self.on_incident(trigger)
