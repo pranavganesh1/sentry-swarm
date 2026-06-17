@@ -4,14 +4,14 @@ import logging
 import queue
 import threading
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 import dashboard_rich as dash
 from metrics import get_summary, record_incident
 from state import IncidentState
 
 if TYPE_CHECKING:
-    from agents.sentry import SentryTrigger
+    from agents.sentry import SentryTrigger, PhysicalTrigger
 
 
 logger = logging.getLogger("orchestrator")
@@ -30,7 +30,7 @@ class IncidentOrchestrator:
         comms: Any | None = None,
         agent_timeout_seconds: float = AGENT_TIMEOUT_SECONDS,
     ):
-        self._queue: queue.Queue[SentryTrigger | None] = queue.Queue()
+        self._queue: queue.Queue[Union[SentryTrigger, PhysicalTrigger] | None] = queue.Queue()
         self._active: dict[str, IncidentState] = {}
         self._known_ids: set[str] = set()
         self._known_types: set[str] = set()
@@ -127,7 +127,7 @@ class IncidentOrchestrator:
         )
         return self._enqueue(trigger)
 
-    def _enqueue(self, trigger: SentryTrigger) -> bool:
+    def _enqueue(self, trigger: Union[SentryTrigger, PhysicalTrigger]) -> bool:
         with self._lock:
             if trigger.incident_id in self._known_ids:
                 logger.warning(
