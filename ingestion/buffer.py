@@ -10,11 +10,14 @@ DB_PATH = Path("logs/events.db")
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000;")
+    return conn
 
 
 def init_db() -> None:
     with _connect() as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS events (
@@ -114,6 +117,7 @@ def get_error_rate(since_seconds: int = 30) -> float:
 
 def get_events_by_type(incident_type: str, since_seconds: int = 60) -> list[dict]:
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     rows = conn.execute("""
         SELECT * FROM events
@@ -128,6 +132,7 @@ def get_events_by_type(incident_type: str, since_seconds: int = 60) -> list[dict
 def get_recent_events_mixed(since_seconds: int = 30) -> list[dict[str, Any]]:
     """Returns both normal and error events for the classifier to see full context."""
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     rows = conn.execute("""
         SELECT * FROM events
