@@ -39,6 +39,7 @@ class IncidentOrchestrator:
         self._workers: list[threading.Thread] = []
         self._sentry_thread: threading.Thread | None = None
         self._agent_timeout_seconds = agent_timeout_seconds
+        self._pipeline_semaphore = threading.Semaphore(MAX_CONCURRENT_INCIDENTS)
 
         if sentry is None:
             from agents.sentry import SentryAgent
@@ -169,6 +170,22 @@ class IncidentOrchestrator:
                 self._queue.task_done()
 
     def _run_pipeline(self, trigger: SentryTrigger) -> None:
+        incident_id = trigger.incident_id
+
+        acquired = self._pipeline_semaphore.acquire(timeout=30)
+        if not acquired:
+            logger.error(
+                "[orchestrator] Could not acquire pipeline slot for %s — system overloaded",
+                incident_id,
+            )
+            return
+
+        try:
+            self._run_pipeline_inner(trigger)
+        finally:
+            self._pipeline_semaphore.release()
+
+    def _run_pipeline_inner(self, trigger: SentryTrigger) -> None:
         incident_id = trigger.incident_id
         state = self._initial_state(trigger)
         self._store_and_emit(state)
