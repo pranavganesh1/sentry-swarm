@@ -39,6 +39,7 @@ class SentryAgent:
         self._running      = False
         self._cooldowns: dict[str, float] = {}   # incident_type → last fired timestamp
         self._active_types: set[str] = set()     # currently open incident types
+        self._active_severities: dict[str, str] = {}  # incident_type → severity
 
     # ------------------------------------------------------------------
     # public API
@@ -92,11 +93,19 @@ class SentryAgent:
             logger.debug("[sentry] Classifier says no incident (type=%s)", result.incident_type)
             return
 
-        # gate 4 — already active
+        # gate 4 — already active, unless severity escalated
         if result.incident_type in self._active_types:
-            logger.debug("[sentry] Incident type %s already active, skipping",
-                         result.incident_type)
-            return
+            prev_severity = self._active_severities.get(result.incident_type, "low")
+            severity_rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+            if severity_rank.get(result.severity, 0) <= severity_rank.get(prev_severity, 0):
+                logger.debug("[sentry] Incident type %s already active at same/lower severity, skipping",
+                             result.incident_type)
+                return
+            else:
+                logger.warning(
+                    "[sentry] Incident type %s ESCALATED %s → %s — re-firing",
+                    result.incident_type, prev_severity, result.severity,
+                )
 
         # gate 5 — cooldown
         if self._in_cooldown(result.incident_type):
@@ -134,6 +143,7 @@ class SentryAgent:
         )
 
         self._active_types.add(result.incident_type)
+        self._active_severities[result.incident_type] = result.severity
         self._cooldowns[result.incident_type] = time.time()
 
         logger.info(
