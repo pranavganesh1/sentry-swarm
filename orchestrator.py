@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
 import dashboard_rich as dash
@@ -18,6 +20,7 @@ logger = logging.getLogger("orchestrator")
 
 MAX_CONCURRENT_INCIDENTS = 3
 AGENT_TIMEOUT_SECONDS = 120
+STUCK_INCIDENT_THRESHOLD_SECONDS = 180  # force-close anything active longer than this
 
 
 class IncidentOrchestrator:
@@ -96,8 +99,15 @@ class IncidentOrchestrator:
         for worker in self._workers:
             worker.start()
 
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop,
+            name="orchestrator-watchdog",
+            daemon=True,
+        )
+        self._watchdog_thread.start()
+
         logger.info(
-            "[orchestrator] Running with %d incident workers",
+            "[orchestrator] Running with %d incident workers, watchdog active",
             MAX_CONCURRENT_INCIDENTS,
         )
 
@@ -118,6 +128,28 @@ class IncidentOrchestrator:
     def get_active_incidents(self) -> list[IncidentState]:
         with self._lock:
             return list(self._active.values())
+
+    def get_incident_by_id(self, incident_id: str) -> IncidentState | None:
+        with self._lock:
+            return self._active.get(incident_id)
+
+    def manually_resolve(self, incident_id: str, reason: str = "Manually resolved") -> bool:
+        with self._lock:
+            state = self._active.get(incident_id)
+            if not state:
+                logger.warning("[orchestrator] No active incident with id %s", incident_id)
+                return False
+            state.status = "resolved"
+            state.comms_update = f"Manually resolved: {reason}"
+
+        record_incident(state)
+        self.sentry.clear_incident(state.incident_type)
+        with self._lock:
+            self._active.pop(incident_id, None)
+            self._known_ids.discard(incident_id)
+            self._known_types.discard(state.incident_type)
+        logger.info("[orchestrator] Incident %s manually resolved: %s", incident_id, reason)
+        return True
 
     def get_metrics(self) -> dict:
         return get_summary()
@@ -327,6 +359,43 @@ class IncidentOrchestrator:
             state.status,
             state.mttd_seconds or 0.0,
         )
+
+    # ------------------------------------------------------------------
+    # watchdog — force-close stuck incidents
+    # ------------------------------------------------------------------
+
+    def _watchdog_loop(self) -> None:
+        while self._running.is_set():
+            time.sleep(30)
+            now = datetime.now()
+            with self._lock:
+                stuck = [
+                    state for state in self._active.values()
+                    if state.status == "active"
+                    and (now - state.started_at).total_seconds() > STUCK_INCIDENT_THRESHOLD_SECONDS
+                ]
+            for state in stuck:
+                logger.warning(
+                    "[orchestrator] Incident %s stuck for >%ds — force closing",
+                    state.incident_id, STUCK_INCIDENT_THRESHOLD_SECONDS,
+                )
+                self._force_close_stuck(state)
+
+    def _force_close_stuck(self, state: IncidentState) -> None:
+        state.status = "timeout"
+        try:
+            record_incident(state)
+        except Exception:
+            logger.exception(
+                "[orchestrator] Failed to record metrics for timed-out %s",
+                state.incident_id,
+            )
+        self.sentry.clear_incident(state.incident_type)
+        with self._lock:
+            self._active.pop(state.incident_id, None)
+            self._known_ids.discard(state.incident_id)
+            self._known_types.discard(state.incident_type)
+        logger.error("[orchestrator] Incident %s marked as timeout and cleared", state.incident_id)
 
     def _emit_callback(
         self,
