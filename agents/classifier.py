@@ -1,8 +1,14 @@
+import logging
+
 from dotenv import load_dotenv
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+
+logger = logging.getLogger("classifier")
 
 
 load_dotenv()
@@ -94,6 +100,16 @@ def format_log_batch(events: list[dict]) -> str:
     return "\n".join(lines)
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=8),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _invoke_classifier(log_batch: str) -> ClassifierOutput:
+    return _get_chain().invoke({"log_batch": log_batch})
+
+
 def classify_events(events: list[dict]) -> ClassifierOutput:
     if not events:
         return ClassifierOutput(
@@ -106,4 +122,16 @@ def classify_events(events: list[dict]) -> ClassifierOutput:
         )
 
     log_batch = format_log_batch(events)
-    return _get_chain().invoke({"log_batch": log_batch})
+    try:
+        return _invoke_classifier(log_batch)
+    except Exception as e:
+        # after 3 retries, fail safe — don't crash the sentry loop
+        logger.error("[classifier] Failed after retries: %s", e)
+        return ClassifierOutput(
+            incident_type="none",
+            severity="low",
+            affected_services=[],
+            confidence=0.0,
+            summary=f"Classifier error: {e}",
+            is_incident=False,
+        )

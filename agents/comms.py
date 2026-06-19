@@ -7,6 +7,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from state import IncidentState
 
@@ -158,6 +159,18 @@ def _get_chains():
     return _slack_chain, _postmortem_chain
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8), reraise=True)
+def _invoke_slack(payload: dict) -> SlackUpdate:
+    slack_chain, _ = _get_chains()
+    return slack_chain.invoke(payload)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8), reraise=True)
+def _invoke_postmortem(payload: dict) -> PostMortem:
+    _, postmortem_chain = _get_chains()
+    return postmortem_chain.invoke(payload)
+
+
 class CommsAgent:
     def run(self, state: IncidentState) -> IncidentState:
         logger.info(
@@ -180,41 +193,77 @@ class CommsAgent:
         return state
 
     def _generate_slack(self, state: IncidentState, fix_steps: str) -> SlackUpdate:
-        slack_chain, _ = _get_chains()
-        return slack_chain.invoke(
-            {
-                "incident_id": state.incident_id,
-                "incident_type": state.incident_type,
-                "severity": state.severity,
-                "affected_services": ", ".join(state.affected_services),
-                "started_at": state.started_at.strftime("%H:%M:%S"),
-                "diagnosis": state.diagnosis or "Diagnosis not available",
-                "fix_steps": fix_steps,
-            }
-        )
+        payload = {
+            "incident_id": state.incident_id,
+            "incident_type": state.incident_type,
+            "severity": state.severity,
+            "affected_services": ", ".join(state.affected_services),
+            "started_at": state.started_at.strftime("%H:%M:%S"),
+            "diagnosis": state.diagnosis or "Diagnosis not available",
+            "fix_steps": fix_steps,
+        }
+        try:
+            return _invoke_slack(payload)
+        except Exception as e:
+            logger.error("[comms] Slack LLM failed after retries, using fallback: %s", e)
+            return self._fallback_slack(state)
 
     def _generate_postmortem(
         self, state: IncidentState, fix_steps: str
     ) -> PostMortem:
         duration = int((datetime.now() - state.started_at).total_seconds() / 60)
-        _, postmortem_chain = _get_chains()
-        return postmortem_chain.invoke(
-            {
-                "incident_id": state.incident_id,
-                "incident_type": state.incident_type,
-                "severity": state.severity,
-                "affected_services": ", ".join(state.affected_services),
-                "started_at": state.started_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "detected_at": (
-                    state.detected_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if state.detected_at
-                    else "unknown"
-                ),
-                "mttd_seconds": state.mttd_seconds or 0,
-                "status": state.status,
-                "diagnosis": state.diagnosis or "Not available",
-                "fix_steps": fix_steps,
-            }
+        payload = {
+            "incident_id": state.incident_id,
+            "incident_type": state.incident_type,
+            "severity": state.severity,
+            "affected_services": ", ".join(state.affected_services),
+            "started_at": state.started_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "detected_at": (
+                state.detected_at.strftime("%Y-%m-%d %H:%M:%S")
+                if state.detected_at
+                else "unknown"
+            ),
+            "mttd_seconds": state.mttd_seconds or 0,
+            "status": state.status,
+            "diagnosis": state.diagnosis or "Not available",
+            "fix_steps": fix_steps,
+        }
+        try:
+            return _invoke_postmortem(payload)
+        except Exception as e:
+            logger.error("[comms] Postmortem LLM failed after retries, using fallback: %s", e)
+            return self._fallback_postmortem(state, duration)
+
+    def _fallback_slack(self, state: IncidentState) -> SlackUpdate:
+        severity_map = {"critical": "\U0001f534", "high": "\U0001f7e0",
+                        "medium": "\U0001f7e1", "low": "\U0001f7e2"}
+        return SlackUpdate(
+            severity_emoji=severity_map.get(state.severity, "\U0001f7e1"),
+            status="investigating",
+            headline=f"{state.incident_type} incident affecting {', '.join(state.affected_services)}",
+            impact="User impact is being assessed (AI comms unavailable)",
+            current_action="Engineering team is investigating and following runbook procedures",
+            eta="Under investigation",
+            incident_id=state.incident_id,
+        )
+
+    def _fallback_postmortem(self, state: IncidentState, duration: int) -> PostMortem:
+        return PostMortem(
+            title=f"{state.incident_type} — {state.started_at.strftime('%Y-%m-%d %H:%M')}",
+            severity=state.severity,
+            duration_minutes=max(1, duration),
+            summary=f"Automated post-mortem unavailable due to AI service outage. "
+                    f"Incident type: {state.incident_type}. "
+                    f"Diagnosis: {state.diagnosis or 'N/A'}",
+            timeline=[f"{state.started_at.strftime('%H:%M')} - Incident started",
+                      f"{(state.detected_at or state.started_at).strftime('%H:%M')} - Detected by Sentry"],
+            root_cause=state.diagnosis or "Root cause analysis pending manual review",
+            impact=f"Services affected: {', '.join(state.affected_services)}",
+            resolution="See fix plan for applied remediation steps",
+            action_items=["Review incident manually and update this post-mortem",
+                          "Investigate AI service outage that prevented auto-generation"],
+            lessons_learned=["AI-generated comms require fallback paths",
+                             "Manual review still needed for AI-degraded incidents"],
         )
 
     def _top_fix_steps(self, fix_plan: list[str] | None, n: int = 3) -> str:
