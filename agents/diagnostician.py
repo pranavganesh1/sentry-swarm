@@ -32,6 +32,13 @@ class DiagnosticianAgent:
         mttd_seconds = max(
             0.0, (trigger.detected_at - trigger.started_at).total_seconds()
         )
+
+        try:
+            diagnosis_text = self._build_diagnosis(trigger)
+        except Exception as e:
+            logger.error("[diagnostician] Failed, using fallback: %s", e)
+            diagnosis_text = self._fallback_diagnosis(trigger)
+
         state = IncidentState(
             incident_id=trigger.incident_id,
             incident_type=trigger.incident_type,
@@ -41,13 +48,23 @@ class DiagnosticianAgent:
             started_at=trigger.started_at,
             detected_at=trigger.detected_at,
             mttd_seconds=round(mttd_seconds, 2),
+            diagnosis=diagnosis_text,
             status="diagnosed",
         )
 
+        logger.info(
+            "[diagnostician] Diagnosis complete for %s (mttd=%.2fs)",
+            trigger.incident_id,
+            state.mttd_seconds,
+        )
+        return state
+
+    def _build_diagnosis(self, trigger: SentryTrigger) -> str:
+        """Normal diagnosis path — builds textual diagnosis from trigger data."""
         runbook_path = self._find_runbook(trigger.incident_type)
         evidence = self._summarize_evidence(trigger.trigger_events)
         services = ", ".join(trigger.affected_services) or "unknown services"
-        state.diagnosis = "\n".join(
+        return "\n".join(
             [
                 f"Incident pattern: {trigger.summary}",
                 f"Affected services: {services}",
@@ -61,12 +78,20 @@ class DiagnosticianAgent:
             ]
         )
 
-        logger.info(
-            "[diagnostician] Diagnosis complete for %s (mttd=%.2fs)",
-            trigger.incident_id,
-            state.mttd_seconds,
-        )
-        return state
+    def _fallback_diagnosis(self, trigger: SentryTrigger) -> str:
+        """Fallback when normal diagnosis fails — keeps the pipeline alive with
+        best-effort info derived directly from the trigger, no LLM needed."""
+        messages = [str(e.get("message", "")).strip()
+                    for e in trigger.trigger_events[:5] if e.get("message")]
+        error_chain = " | ".join(messages) if messages else "No trigger messages"
+        return "\n".join([
+            f"[FALLBACK DIAGNOSIS — normal path failed]",
+            f"Incident pattern: {trigger.summary}",
+            f"Affected services: {', '.join(trigger.affected_services) or 'unknown'}",
+            f"Error chain: {error_chain}",
+            f"Relevant runbook: {trigger.incident_type}.md",
+            f"Confidence: 0.30 (fallback — needs escalation)",
+        ])
 
     def _find_runbook(self, incident_type: str) -> Path | None:
         filename = RUNBOOK_FILES.get(incident_type)
