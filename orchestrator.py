@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import threading
@@ -9,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
 import dashboard_rich as dash
+from commands import get_pending_commands, mark_processed
 from metrics import get_summary, record_incident
 from state import IncidentState
 
@@ -21,6 +23,9 @@ logger = logging.getLogger("orchestrator")
 MAX_CONCURRENT_INCIDENTS = 3
 AGENT_TIMEOUT_SECONDS = 120
 STUCK_INCIDENT_THRESHOLD_SECONDS = 180  # force-close anything active longer than this
+
+
+ACTIVE_SNAPSHOT_FILE = "logs/active_incidents.json"
 
 
 class IncidentOrchestrator:
@@ -106,8 +111,15 @@ class IncidentOrchestrator:
         )
         self._watchdog_thread.start()
 
+        self._command_thread = threading.Thread(
+            target=self._command_loop,
+            name="orchestrator-commands",
+            daemon=True,
+        )
+        self._command_thread.start()
+
         logger.info(
-            "[orchestrator] Running with %d incident workers, watchdog active",
+            "[orchestrator] Running with %d incident workers, watchdog active, commands active",
             MAX_CONCURRENT_INCIDENTS,
         )
 
@@ -149,6 +161,7 @@ class IncidentOrchestrator:
             self._known_ids.discard(incident_id)
             self._known_types.discard(state.incident_type)
         logger.info("[orchestrator] Incident %s manually resolved: %s", incident_id, reason)
+        self._write_active_snapshot()
         return True
 
     def get_metrics(self) -> dict:
@@ -332,6 +345,7 @@ class IncidentOrchestrator:
     def _store_and_emit(self, state: IncidentState) -> None:
         with self._lock:
             self._active[state.incident_id] = state
+        self._write_active_snapshot()
         self._emit_callback(self.on_state_update, state, "on_state_update")
 
     def _finish_incident(
@@ -359,6 +373,7 @@ class IncidentOrchestrator:
             state.status,
             state.mttd_seconds or 0.0,
         )
+        self._write_active_snapshot()
 
     # ------------------------------------------------------------------
     # watchdog — force-close stuck incidents
@@ -396,6 +411,7 @@ class IncidentOrchestrator:
             self._known_ids.discard(state.incident_id)
             self._known_types.discard(state.incident_type)
         logger.error("[orchestrator] Incident %s marked as timeout and cleared", state.incident_id)
+        self._write_active_snapshot()
 
     def _emit_callback(
         self,
@@ -413,3 +429,67 @@ class IncidentOrchestrator:
                 callback_name,
                 error,
             )
+
+    # ------------------------------------------------------------------
+    # command polling — picks up resolve/cancel commands from dashboards
+    # ------------------------------------------------------------------
+
+    def _command_loop(self) -> None:
+        while self._running.is_set():
+            time.sleep(2)
+            try:
+                pending = get_pending_commands()
+            except Exception as e:
+                logger.error("[orchestrator] Failed reading commands: %s", e)
+                continue
+
+            for cmd in pending:
+                incident_id = cmd["incident_id"]
+                action      = cmd["action"]
+                reason      = cmd.get("reason", "")
+
+                if action == "resolve":
+                    ok = self.manually_resolve(
+                        incident_id,
+                        reason=reason or "Manually resolved via dashboard",
+                    )
+                    logger.info(
+                        "[orchestrator] Command 'resolve' for %s → %s",
+                        incident_id, "OK" if ok else "NOT FOUND",
+                    )
+                elif action == "cancel":
+                    ok = self.manually_resolve(
+                        incident_id,
+                        reason=reason or "Cancelled via dashboard",
+                    )
+                    logger.info(
+                        "[orchestrator] Command 'cancel' for %s → %s",
+                        incident_id, "OK" if ok else "NOT FOUND",
+                    )
+                else:
+                    logger.warning("[orchestrator] Unknown command action: %s", action)
+
+                mark_processed(cmd["submitted_at"])
+
+    # ------------------------------------------------------------------
+    # active incident snapshot — written to disk for Streamlit to read
+    # ------------------------------------------------------------------
+
+    def _write_active_snapshot(self) -> None:
+        import os
+        os.makedirs("logs", exist_ok=True)
+        with self._lock:
+            snapshot = [
+                {
+                    "incident_id":       s.incident_id,
+                    "incident_type":     s.incident_type,
+                    "severity":          s.severity,
+                    "affected_services": s.affected_services,
+                    "started_at":        s.started_at.isoformat(),
+                    "status":            s.status,
+                    "diagnosis":         (s.diagnosis or "")[:300],
+                }
+                for s in self._active.values()
+            ]
+        with open(ACTIVE_SNAPSHOT_FILE, "w") as f:
+            json.dump(snapshot, f, indent=2)
