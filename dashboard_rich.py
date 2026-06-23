@@ -1,3 +1,4 @@
+import sys
 import time
 import threading
 import logging
@@ -15,6 +16,7 @@ from rich import box
 
 from state import IncidentState
 from metrics import get_summary
+from commands import submit_command
 
 console = Console()
 
@@ -266,11 +268,47 @@ def _tail_log_file(filepath: str = "logs/app.log"):
 
 # ── main dashboard loop ───────────────────────────────────────────────────
 
+def _input_listener():
+    """Listens for 'r <incident_id>' or 'c <incident_id>' typed in the terminal."""
+    print(
+        "\n[dashboard] Type 'r <incident_id>' to resolve, "
+        "'c <incident_id>' to cancel, then Enter.\n"
+    )
+    while True:
+        try:
+            line = input().strip()
+        except EOFError:
+            break
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        cmd, incident_id = parts
+        if cmd == "r":
+            submit_command(
+                "resolve", incident_id,
+                reason="Manually resolved via Rich dashboard",
+            )
+            add_timeline_event(
+                f"[bold yellow]Manual resolve sent for {incident_id}[/bold yellow]"
+            )
+        elif cmd == "c":
+            submit_command(
+                "cancel", incident_id,
+                reason="Cancelled via Rich dashboard",
+            )
+            add_timeline_event(
+                f"[bold red]Manual cancel sent for {incident_id}[/bold red]"
+            )
+
+
 def run_dashboard():
     layout = _build_layout()
 
-    # start log tailer in background
+    # start background threads
     threading.Thread(target=_tail_log_file, daemon=True).start()
+    threading.Thread(target=_input_listener, daemon=True).start()
 
     add_timeline_event("[bold cyan]Dashboard started[/bold cyan]")
 
