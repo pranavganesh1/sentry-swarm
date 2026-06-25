@@ -3,7 +3,7 @@ import logging
 from dotenv import load_dotenv
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -71,14 +71,14 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(format_instructions=parser.get_format_instructions())
 
-# Lazy-initialised so missing OPENAI_API_KEY doesn't crash on import
+# Lazy-initialised so missing GOOGLE_API_KEY doesn't crash on import
 _classifier_chain = None
 
 
 def _get_chain():
     global _classifier_chain
     if _classifier_chain is None:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
         _classifier_chain = prompt | llm | parser
     return _classifier_chain
 

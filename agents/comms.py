@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -153,7 +153,7 @@ _postmortem_chain = None
 def _get_chains():
     global _llm, _slack_chain, _postmortem_chain
     if _llm is None:
-        _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+        _llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.2)
         _slack_chain = slack_prompt | _llm | slack_parser
         _postmortem_chain = postmortem_prompt | _llm | postmortem_parser
     return _slack_chain, _postmortem_chain

@@ -2,7 +2,7 @@ watchdog
 rich
 faker
 langchain-core
-langchain-openai
+langchain-google-genai
 pydantic
 python-dotenv
 tenacity
