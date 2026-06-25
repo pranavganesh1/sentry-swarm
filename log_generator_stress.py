@@ -22,6 +22,18 @@ SPIKE_TYPES = {
         "ERROR [payment-service] Process killed by OOM killer (RSS: 1100MB)",
         "ERROR [nginx] upstream payment-service unavailable (connection refused)",
     ],
+    "failed_deploy": [
+        "ERROR [auth-service] Deploy pipeline failed: exit code 1",
+        "ERROR [auth-service] Pod in CrashLoopBackOff (5 restarts)",
+        "ERROR [auth-service] Health check returned 503 after deploy",
+        "WARN  [nginx] upstream auth-service unavailable (0 ready replicas)",
+    ],
+    "cascading_failure": [
+        "ERROR [user-api] Connection refused: upstream auth-service unavailable",
+        "FATAL [payment-service] Circuit breaker OPEN for auth-service",
+        "ERROR [db-proxy] Failed to authenticate request: upstream timeout",
+        "ERROR [nginx] 503 Service Unavailable - dependency auth-service down",
+    ],
 }
 
 def write_log(line: str):
@@ -40,11 +52,13 @@ def fire_spike(incident_type: str, duration: int = 10):
     print(f"[stress] {incident_type} spike ended")
 
 def run_stress_test():
-    print("[stress] Launching 3 concurrent incident types...")
+    print("[stress] Launching 5 concurrent incident types...")
     threads = [
         threading.Thread(target=fire_spike, args=("http_5xx", 12)),
         threading.Thread(target=fire_spike, args=("db_timeout", 10)),
         threading.Thread(target=fire_spike, args=("oom_kill", 8)),
+        threading.Thread(target=fire_spike, args=("failed_deploy", 10)),
+        threading.Thread(target=fire_spike, args=("cascading_failure", 12)),
     ]
     for t in threads:
         t.start()
@@ -57,3 +71,4 @@ def run_stress_test():
 
 if __name__ == "__main__":
     run_stress_test()
+

@@ -44,6 +44,18 @@ SPIKE_TYPES = {
         lambda: f"WARN  [payment-service] Memory usage at {random.randint(85, 99)}% - approaching limit",
         lambda: "ERROR [nginx] upstream payment-service unavailable (connection refused)",
     ],
+    "failed_deploy": [
+        lambda: "ERROR [auth-service] Deploy pipeline failed: exit code 1",
+        lambda: f"ERROR [auth-service] Pod in CrashLoopBackOff ({random.randint(3, 8)} restarts)",
+        lambda: "ERROR [auth-service] Health check returned 503 after deploy",
+        lambda: "WARN  [nginx] upstream auth-service unavailable (0 ready replicas)",
+    ],
+    "cascading_failure": [
+        lambda: f"ERROR [{svc()}] Connection refused: upstream auth-service unavailable",
+        lambda: f"FATAL [{svc()}] Circuit breaker OPEN for auth-service",
+        lambda: f"ERROR [{svc()}] Failed to authenticate request: upstream timeout",
+        lambda: f"ERROR [{svc()}] 503 Service Unavailable - dependency auth-service down",
+    ],
 }
 
 
