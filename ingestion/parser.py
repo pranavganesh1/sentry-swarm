@@ -24,6 +24,19 @@ SPIKE_PATTERNS = {
         r"Memory usage at \d+%",
         r"upstream .+ unavailable \(connection refused\)",
     ),
+    "failed_deploy": (
+        r"Deploy pipeline failed",
+        r"CrashLoopBackOff",
+        r"ImagePullBackOff",
+        r"Health check returned 503 after deploy",
+        r"0 ready replicas",
+    ),
+    "cascading_failure": (
+        r"Circuit breaker OPEN",
+        r"Connection refused.*upstream",
+        r"dependency .+ down",
+        r"Failed to authenticate request.*upstream timeout",
+    ),
 }
 
 LOG_LINE_PATTERN = re.compile(
