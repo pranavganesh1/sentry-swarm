@@ -49,44 +49,27 @@ def live_dashboard():
     st.divider()
     st.subheader("🧪 Simulate an incident")
     st.caption(
-        "This sends a trigger to `logs/buffer.json`. "
-        "The sentry agent picks it up automatically."
+        "Injects error log lines into `logs/app.log` for the chosen incident type. "
+        "The watcher → sentry → classifier pipeline picks them up automatically."
     )
     sim_col1, sim_col2, sim_col3 = st.columns([2, 2, 2])
     sim_type = sim_col1.selectbox(
         "Type",
-        ["cpu_spike", "memory_leak", "disk_full", "network_latency", "error_rate_spike"],
+        ["http_5xx", "db_timeout", "oom_kill", "failed_deploy", "cascading_failure"],
         key="sim_type",
     )
-    sim_sev = sim_col2.selectbox(
-        "Severity", ["critical", "high", "medium", "low"], key="sim_sev"
+    sim_duration = sim_col2.slider(
+        "Duration (seconds)", min_value=5, max_value=30, value=10, key="sim_dur"
     )
-    sim_svc = sim_col3.text_input("Services (comma-separated)", "api-gateway", key="sim_svc")
+    sim_col3.markdown("")  # spacer
 
     if st.button("🚀 Fire simulated incident", use_container_width=True):
-        from datetime import datetime
-        import uuid
+        import threading
+        from log_generator_stress import fire_spike
 
-        trigger = {
-            "incident_id": uuid.uuid4().hex[:8],
-            "incident_type": sim_type,
-            "severity": sim_sev,
-            "affected_services": [s.strip() for s in sim_svc.split(",") if s.strip()],
-            "trigger_events": [{"msg": "Simulated from Streamlit dashboard"}],
-            "started_at": datetime.now().isoformat(),
-            "detected_at": datetime.now().isoformat(),
-        }
-        os.makedirs("logs", exist_ok=True)
-        buf_path = "logs/buffer.json"
-        try:
-            with open(buf_path) as f:
-                buf = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            buf = []
-        buf.append(trigger)
-        with open(buf_path, "w") as f:
-            json.dump(buf, f, indent=2)
-        st.success(f"Trigger queued: **{trigger['incident_id']}** ({sim_type})")
+        t = threading.Thread(target=fire_spike, args=(sim_type, sim_duration), daemon=True)
+        t.start()
+        st.success(f"Spike **{sim_type}** firing for {sim_duration}s — watch the pipeline pick it up")
 
     # ── active incidents — manual control ────────────────────────────
     st.divider()
