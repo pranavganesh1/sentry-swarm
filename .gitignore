@@ -6,3 +6,4 @@ logs/*.log
 logs/*.db
 logs/*.json
 postmortems/*.md
+.env
