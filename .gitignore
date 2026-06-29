@@ -1,9 +1,28 @@
+# Python
 venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
+
+# Runtime outputs
 logs/*.log
 logs/*.db
 logs/*.json
 postmortems/*.md
+
+# Benchmark results
+benchmark/results.json
+
+# Environment
 .env
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store

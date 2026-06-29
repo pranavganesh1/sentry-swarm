@@ -1,8 +1,17 @@
-watchdog
-rich
-faker
+# Core
 langchain-core
 langchain-google-genai
 pydantic
 python-dotenv
 tenacity
+
+# Ingestion & monitoring
+watchdog
+
+# Dashboards
+rich
+streamlit
+pandas
+
+# Log simulation
+faker
