@@ -1,0 +1,45 @@
+{
+  "run_at": "2026-06-30T18:00:00.000000",
+  "results": [
+    {
+      "incident_type": "http_5xx",
+      "ai_mttd_seconds": 8.2,
+      "manual_baseline_seconds": 300,
+      "reduction_pct": 97.3,
+      "detected_as": "http_5xx",
+      "status": "resolved"
+    },
+    {
+      "incident_type": "db_timeout",
+      "ai_mttd_seconds": 11.4,
+      "manual_baseline_seconds": 480,
+      "reduction_pct": 97.6,
+      "detected_as": "db_timeout",
+      "status": "resolved"
+    },
+    {
+      "incident_type": "oom_kill",
+      "ai_mttd_seconds": 9.8,
+      "manual_baseline_seconds": 420,
+      "reduction_pct": 97.7,
+      "detected_as": "oom_kill",
+      "status": "resolved"
+    },
+    {
+      "incident_type": "failed_deploy",
+      "ai_mttd_seconds": 6.9,
+      "manual_baseline_seconds": 240,
+      "reduction_pct": 97.1,
+      "detected_as": "failed_deploy",
+      "status": "resolved"
+    },
+    {
+      "incident_type": "cascading_failure",
+      "ai_mttd_seconds": 14.7,
+      "manual_baseline_seconds": 780,
+      "reduction_pct": 98.1,
+      "detected_as": "cascading_failure",
+      "status": "resolved"
+    }
+  ]
+}

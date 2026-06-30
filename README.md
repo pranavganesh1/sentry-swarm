@@ -1,151 +1,110 @@
-# ⚡ Sentry-Swarm — Multi-Agent DevOps Incident Response
+# Agentic DevOps Incident Response Commander
 
-An AI-powered, multi-agent system that **automatically detects, diagnoses, and responds** to production incidents in real-time. The system monitors application logs, classifies incidents using LLM-based analysis, and generates both fix plans and stakeholder communications — reducing mean-time-to-diagnosis (MTTD) by **~68%** compared to manual triage.
+A multi-agent LLM system that autonomously detects, diagnoses, and responds to
+production incidents — built as a portfolio project to demonstrate production
+systems thinking, not a toy chatbot.
 
----
+## What it does
+
+Four specialized LLM agents work together to handle an incident end to end:
+
+- **Sentry** — polls structured log events, detects anomalies via error-rate
+  thresholds, classifies the incident type using an LLM
+- **Diagnostician** — correlates errors across services, retrieves relevant
+  runbook context via RAG (Chroma), produces a root-cause diagnosis
+- **Fix-Planner** — outputs a prioritized, risk-flagged list of concrete
+  remediation commands (kubectl, shell, SQL)
+- **Comms** — drafts a Slack-style incident update and a full blameless
+  post-mortem document
+
+All four are orchestrated by a background pipeline with retry logic, a stuck-
+incident watchdog, concurrency limits, and manual override controls — wired
+into both a Rich terminal dashboard and a Streamlit web dashboard.
 
 ## Architecture
 
-```
-logs/app.log → Watcher → SQLite Buffer → Sentry Agent → Classifier (Gemini)
-                                              ↓
-                                     Orchestrator Pipeline
-                                    ┌──────────────────────┐
-                                    │  1. Diagnostician     │  ← Runbook lookup
-                                    │  2. Fix-Planner       │  ← Remediation steps
-                                    │  3. Comms Agent       │  ← Slack + Post-mortem
-                                    └──────────────────────┘
-                                              ↓
-                                  Rich TUI / Streamlit Dashboard
-```
+![Sentry-Swarm System Architecture](docs/architecture.png)
 
-### Agents
+Log events flow from a simulated production log through a `watchdog` file
+watcher into a SQLite buffer. The Sentry agent polls this buffer, classifies
+incidents with an LLM, and fires the orchestrator, which runs the remaining
+three agents in sequence per incident while enforcing concurrency limits and
+cooldowns. Runbook context is retrieved from a Chroma vector store seeded with
+5 SRE runbooks. Results are tracked to a JSON metrics log and surfaced live
+in two dashboards.
 
-| Agent | Role |
-|-------|------|
-| **Sentry** | Monitors error rates, triggers LLM classifier when thresholds are breached |
-| **Classifier** | Gemini 2.0 Flash — classifies incident type, severity, and affected services |
-| **Diagnostician** | Correlates trigger events with runbooks to build a diagnosis |
-| **Fix-Planner** | Extracts remediation steps from runbooks, builds a structured fix plan |
-| **Comms** | Generates a Slack update and blameless post-mortem via LLM |
+## Benchmark results
 
-### Incident Types
+Measured via `benchmark/run_benchmark.py` against a documented manual-baseline
+estimate (see `benchmark/manual_baseline.md`):
 
-`http_5xx` · `db_timeout` · `oom_kill` · `failed_deploy` · `cascading_failure`
+| Incident type      | AI MTTD | Manual baseline | Reduction |
+|---------------------|---------|------------------|-----------|
+| http_5xx             | ~8s     | ~300s            | ~97%      |
+| db_timeout            | ~11s    | ~480s            | ~98%      |
+| oom_kill               | ~10s    | ~420s            | ~98%      |
+| failed_deploy          | ~7s     | ~240s            | ~97%      |
+| cascading_failure      | ~15s    | ~780s            | ~98%      |
 
----
+MTTD here measures time from first error log to completed diagnosis. The
+manual baseline accounts for realistic on-call steps: alert acknowledgment,
+dashboard navigation, log searching, and manual cross-service correlation.
 
-## Quick Start
+## Stack
 
-### 1. Setup
+Python, LangChain, Google GenAI (Gemini 2.0 Flash), Chroma, SQLite, watchdog,
+Rich, Streamlit, Pydantic, tenacity. Developed on Windows.
+
+## Setup
 
 ```bash
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Linux/Mac
-
+git clone <repo>
+cd incident-commander
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env   # add your GOOGLE_API_KEY
+mkdir -p logs
+
+python ingestion/embedder.py   # build the runbook vector store
 ```
 
-### 2. Configure
+## Running it
 
 ```bash
-cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
-```
-
-### 3. Run
-
-**Terminal 1** — Start the log watcher:
-```bash
-python ingestion/watcher.py
-```
-
-**Terminal 2** — Start the log generator:
-```bash
+# terminal 1 — simulated production logs
 python log_generator.py
-```
 
-**Terminal 3** — Start the main system with Rich dashboard:
-```bash
+# terminal 2 — log ingestion
+python ingestion/watcher.py
+
+# terminal 3 — orchestrator + Rich dashboard
 python main.py
-```
 
-**Optional** — Streamlit web dashboard:
-```bash
+# terminal 4 — web dashboard
 streamlit run dashboard_streamlit.py
 ```
 
----
+Open `localhost:8501` for the Streamlit dashboard, or watch the Rich terminal
+in terminal 3. Trigger a manual incident from the Streamlit "Simulate an
+incident" panel to see the full pipeline fire on demand.
 
-## Project Structure
+## Project structure
 
-```
-├── main.py                  # Entry point — starts orchestrator + Rich dashboard
-├── orchestrator.py          # Central pipeline coordinator (threads, watchdog, commands)
-├── state.py                 # IncidentState dataclass
-├── metrics.py               # MTTD tracking and metrics aggregation
-├── commands.py              # File-based cross-process command queue
-│
-├── agents/
-│   ├── sentry.py            # Log monitor + incident trigger
-│   ├── classifier.py        # LLM-based log classification (Gemini)
-│   ├── diagnostician.py     # Diagnosis builder with runbook lookup
-│   ├── fix_planner.py       # Remediation step extractor
-│   └── comms.py             # Slack update + post-mortem generation
-│
-├── ingestion/
-│   ├── watcher.py           # File watcher (watchdog) → SQLite
-│   ├── parser.py            # Log line parser with incident type detection
-│   └── buffer.py            # SQLite event buffer with error rate queries
-│
-├── sensors/
-│   ├── sensor_interface.py  # Physical sensor (UNO Q) integration
-│   └── __init__.py
-│
-├── runbooks/                # 5 incident response runbooks
-├── dashboard_rich.py        # Rich TUI live dashboard
-├── dashboard_streamlit.py   # Streamlit web dashboard
-├── log_generator.py         # Normal traffic + periodic spike simulator
-├── log_generator_stress.py  # Concurrent multi-type stress testing
-├── mobile_app/              # SSE-based mobile responder UI
-│
-├── benchmark/
-│   ├── run_benchmark.py     # Formal 5-type MTTD benchmark
-│   └── manual_baseline.md   # Manual triage baseline methodology
-│
-├── test_*.py                # Pytest unit tests
-├── requirements.txt
-└── .github/workflows/ci.yml # GitHub Actions CI
-```
+See `agents/` for the four LLM agents, `ingestion/` for log parsing and RAG,
+`orchestrator.py` for lifecycle management, `dashboard_rich.py` /
+`dashboard_streamlit.py` for the two UIs, and `benchmark/` for the MTTD
+validation.
 
----
+## Design notes
 
-## Testing
-
-```bash
-python -m pytest -v
-```
-
-## Benchmarking
-
-```bash
-python benchmark/run_benchmark.py            # Run full 5-type benchmark
-python benchmark/run_benchmark.py --summary  # Reprint last results
-```
-
----
-
-## Key Design Decisions
-
-- **Fallback chains**: Every LLM-dependent agent has a deterministic fallback path, ensuring the pipeline never crashes due to API failures
-- **Concurrent pipeline**: Up to 3 incidents processed simultaneously via semaphore-controlled worker threads
-- **Watchdog**: Force-closes stuck incidents after 180s to prevent pipeline deadlocks
-- **Cooldown system**: Prevents duplicate incident firing with per-type cooldowns + severity escalation override
-- **File-based IPC**: Streamlit dashboard communicates with the orchestrator via a JSON command queue — no shared memory needed
-
----
-
-## License
-
-MIT
+- **SQLite in WAL mode** to handle concurrent reads/writes under load
+- **Semaphore-capped concurrency** to avoid LLM rate-limit storms during
+  multi-incident bursts
+- **Graceful degradation** — if the LLM call fails after retries, the
+  Diagnostician falls back to a rule-based diagnosis instead of crashing
+  the incident. The vector store retriever also degrades gracefully to local
+  JSON keyword searching if Chroma is not seeded.
+- **Watchdog thread** force-closes incidents stuck >3 minutes
+- **File-based command queue** (`commands.json`) lets the dashboards trigger
+  manual resolve/cancel across process boundaries without a shared DB
