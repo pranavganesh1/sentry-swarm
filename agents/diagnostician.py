@@ -94,6 +94,14 @@ class DiagnosticianAgent:
         ])
 
     def _find_runbook(self, incident_type: str) -> Path | None:
+        try:
+            from ingestion.retriever import retrieve_relevant_runbook
+            rb = retrieve_relevant_runbook(incident_type, incident_type)
+            if rb and rb.get("path"):
+                return Path(rb["path"])
+        except Exception as e:
+            logger.warning("[diagnostician] RAG retrieval failed, using direct resolution: %s", e)
+
         filename = RUNBOOK_FILES.get(incident_type)
         if not filename:
             return None
