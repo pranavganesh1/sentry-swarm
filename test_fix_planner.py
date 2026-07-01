@@ -1,12 +1,15 @@
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 from agents.fix_planner import FixPlannerAgent
 from state import IncidentState
 
 
 class FixPlannerTests(unittest.TestCase):
-    def test_builds_plan_from_matching_runbook(self) -> None:
+    @patch("agents.fix_planner.os.getenv")
+    def test_builds_plan_from_matching_runbook(self, mock_getenv) -> None:
+        mock_getenv.return_value = None
         state = IncidentState(
             incident_id="incident-2",
             incident_type="db_timeout",
