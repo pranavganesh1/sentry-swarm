@@ -4,6 +4,7 @@ import sys
 import threading
 from pathlib import Path
 
+import health_check
 from orchestrator import IncidentOrchestrator
 import dashboard_rich as dash
 
@@ -21,6 +22,9 @@ def configure_logging() -> None:
 
 
 def main() -> int:
+    # Run pre-flight checks
+    health_check.run_diagnostics()
+
     configure_logging()
     orchestrator = IncidentOrchestrator()
 
