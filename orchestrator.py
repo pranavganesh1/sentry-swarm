@@ -80,6 +80,7 @@ class IncidentOrchestrator:
         self.on_incident_done: Callable[[IncidentState], None] | None = None
 
     def start(self) -> None:
+        """Start the orchestrator, launching sentry, worker, watchdog, and command threads."""
         if self._running.is_set():
             logger.warning("[orchestrator] Start ignored; already running")
             return
@@ -125,6 +126,7 @@ class IncidentOrchestrator:
         )
 
     def stop(self, join_timeout: float = 5.0) -> None:
+        """Stop the orchestrator, stopping the sentry and waiting for workers to finish."""
         if not self._running.is_set():
             return
 
@@ -232,6 +234,7 @@ class IncidentOrchestrator:
             self._pipeline_semaphore.release()
 
     def _run_pipeline_inner(self, trigger: SentryTrigger) -> None:
+        """Run the incident processing pipeline for a single trigger."""
         incident_id = trigger.incident_id
         state = self._initial_state(trigger)
         self._store_and_emit(state)
