@@ -22,7 +22,22 @@ RUNBOOK_FILES = {
 
 
 class DiagnosticianAgent:
+    """Agent responsible for diagnosing incidents based on trigger events.
+
+    Uses runbook information and trigger evidence to generate diagnostic
+    information for incidents, with fallback capabilities when external
+    services are unavailable.
+    """
+
     def run(self, trigger: SentryTrigger) -> IncidentState:
+        """Process a trigger event to generate incident diagnosis.
+
+        Args:
+            trigger: The triggering event containing incident information
+
+        Returns:
+            IncidentState: Updated incident state with diagnosis information
+        """
         logger.info(
             "[diagnostician] Diagnosing incident %s (%s)",
             trigger.incident_id,
@@ -60,6 +75,15 @@ class DiagnosticianAgent:
         return state
 
     def _build_diagnosis(self, trigger: SentryTrigger) -> str:
+        """Build diagnosis by combining trigger data with runbook information.
+
+        Args:
+            trigger: The triggering event containing incident information
+
+        Returns:
+            str: Formatted diagnosis string combining incident pattern,
+                 affected services, trigger evidence, runbook info, and confidence
+        """
         """Normal diagnosis path — builds textual diagnosis from trigger data."""
         runbook_path = self._find_runbook(trigger.incident_type)
         evidence = self._summarize_evidence(trigger.trigger_events)

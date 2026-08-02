@@ -111,6 +111,19 @@ def _invoke_classifier(log_batch: str) -> ClassifierOutput:
 
 
 def classify_events(events: list[dict]) -> ClassifierOutput:
+    """Classify a batch of log events to detect potential incidents.
+
+    Analyzes log events using LLM-powered classification to identify
+    incidents and their severity levels.
+
+    Args:
+        events: List of log event dictionaries to analyze
+
+    Returns:
+        ClassifierOutput: Classification result containing incident type,
+                         severity, affected services, confidence score,
+                         summary, and incident flag
+    """
     if not events:
         return ClassifierOutput(
             incident_type="none",

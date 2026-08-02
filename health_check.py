@@ -12,6 +12,11 @@ RESET = "\033[0m"
 BOLD = "\033[1m"
 
 def check_env() -> bool:
+    """Check environment configuration including .env file and required API keys.
+
+    Returns:
+        bool: True if environment check passes, False otherwise
+    """
     load_dotenv()
     env_path = Path(".env")
     if not env_path.exists():
@@ -28,9 +33,16 @@ def check_env() -> bool:
     return True
 
 def check_directories() -> bool:
+    """Check if logs directory exists and is writable.
+
+    Creates the logs directory if it doesn't exist and tests write permissions.
+
+    Returns:
+        bool: True if directory check passes, False otherwise
+    """
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Check writability
     test_file = logs_dir / ".write_test"
     try:
@@ -43,6 +55,14 @@ def check_directories() -> bool:
         return False
 
 def check_database() -> bool:
+    """Check SQLite database connection and table status.
+
+    Verifies that the events database exists and can be queried.
+    If database doesn't exist, returns True (will be created on first use).
+
+    Returns:
+        bool: True if database check passes, False otherwise
+    """
     db_path = Path("logs/events.db")
     if not db_path.exists():
         print(f"  {YELLOW}[ WARN ]{RESET} SQLite Buffer Database - logs/events.db does not exist yet (created on ingestion).")
@@ -61,9 +81,17 @@ def check_database() -> bool:
         return False
 
 def check_chromadb() -> bool:
+    """Check ChromaDB vector store and fallback JSON store status.
+
+    Verifies that the vector database is properly initialized and contains
+    runbook data. Also checks the fallback JSON store.
+
+    Returns:
+        bool: True if ChromaDB check passes, False otherwise
+    """
     chroma_dir = Path("vectorstore/chroma")
     fallback_store = chroma_dir / "fallback_store.json"
-    
+
     # 1. Check fallback json
     if not fallback_store.exists():
         print(f"  {YELLOW}[ WARN ]{RESET} Vector Store Fallback (JSON) - fallback_store.json not found. Run ingestion/embedder.py.")
@@ -86,7 +114,7 @@ def check_chromadb() -> bool:
         client = chromadb.PersistentClient(path=str(chroma_dir.resolve()))
         collections = client.list_collections()
         has_runbooks = any(c.name == "runbooks" for c in collections)
-        
+
         if has_runbooks:
             collection = client.get_collection(name="runbooks")
             count = collection.count()
@@ -100,10 +128,18 @@ def check_chromadb() -> bool:
         print(f"  {YELLOW}[ WARN ]{RESET} Chroma Vector Store - chromadb not loaded. Falling back to local search.")
     except Exception as e:
         print(f"  {RED}[ FAIL ]{RESET} Chroma Vector Store - Failed to initialize client: {e}")
-    
+
     return True
 
 def run_diagnostics() -> bool:
+    """Run all pre-flight diagnostic checks and report results.
+
+    Executes environment, directory, database, and vector store checks.
+    Prints formatted results to console with color-coded status indicators.
+
+    Returns:
+        bool: True if all checks pass, False if any check fails
+    """
     print(f"\n{BOLD}=================================================={RESET}")
     print(f"{BOLD}SENTRY-SWARM PRE-FLIGHT SYSTEM DIAGNOSTICS{RESET}")
     print(f"{BOLD}=================================================={RESET}")
