@@ -84,7 +84,6 @@ class DiagnosticianAgent:
             str: Formatted diagnosis string combining incident pattern,
                  affected services, trigger evidence, runbook info, and confidence
         """
-        """Normal diagnosis path — builds textual diagnosis from trigger data."""
         runbook_path = self._find_runbook(trigger.incident_type)
         evidence = self._summarize_evidence(trigger.trigger_events)
         services = ", ".join(trigger.affected_services) or "unknown services"
@@ -118,6 +117,17 @@ class DiagnosticianAgent:
         ])
 
     def _find_runbook(self, incident_type: str) -> Path | None:
+        """Locate the runbook for an incident type via RAG or direct file lookup.
+
+        Tries the RAG retriever first; falls back to a static file mapping
+        in RUNBOOK_FILES if the retriever is unavailable.
+
+        Args:
+            incident_type: The classified incident type string.
+
+        Returns:
+            Path to the matching runbook file, or None if not found.
+        """
         try:
             from ingestion.retriever import retrieve_relevant_runbook
             rb = retrieve_relevant_runbook(incident_type, incident_type)
@@ -134,6 +144,17 @@ class DiagnosticianAgent:
         return path if path.exists() else None
 
     def _summarize_evidence(self, events: list[dict], limit: int = 3) -> str:
+        """Extract and join the first *limit* trigger event messages.
+
+        Args:
+            events: Raw trigger event dicts, each optionally containing a
+                ``message`` key.
+            limit: Maximum number of messages to include.
+
+        Returns:
+            A pipe-delimited summary string, or a fallback message if no
+            trigger messages were captured.
+        """
         messages = [
             str(event.get("message", "")).strip()
             for event in events
