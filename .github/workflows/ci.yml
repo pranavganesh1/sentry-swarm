@@ -4,12 +4,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install deps
         run: pip install -r requirements.txt
+      - name: Check Python syntax
+        run: python -m py_compile orchestrator.py && python -m py_compile main.py && python -m compileall agents/ ingestion/ -q
       - name: Run tests
         run: pytest -q
