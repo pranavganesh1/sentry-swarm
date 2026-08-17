@@ -168,6 +168,12 @@ def wait_for_resolution(incident_type: str, timeout: int = 120) -> dict | None:
 # ── Main benchmark ───────────────────────────────────────────────────
 
 def run_benchmark():
+    """Execute the full 5-incident benchmark suite against a clean system.
+
+    Starts the log watcher, orchestrator, and normal-traffic generator,
+    then injects error spikes for each incident type sequentially.  Results
+    are saved to ``benchmark/results.json``.
+    """
     print("=" * 70)
     print("  SENTRY-SWARM FORMAL BENCHMARK")
     print("  5 incident types · sequential · clean state")
@@ -261,6 +267,7 @@ def run_benchmark():
 
 
 def save_results(results: list[dict]):
+    """Persist benchmark results to *RESULTS_FILE* as JSON."""
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(RESULTS_FILE, "w") as f:
         json.dump({
@@ -271,6 +278,7 @@ def save_results(results: list[dict]):
 
 
 def print_summary(results: list[dict]):
+    """Print a formatted benchmark summary table and headline reduction metric."""
     resolved = [r for r in results if r["status"] == "resolved"]
     print(f"\n{'=' * 70}")
     print(f"BENCHMARK SUMMARY")
