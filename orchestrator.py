@@ -39,7 +39,8 @@ class IncidentOrchestrator:
         comms: Any | None = None,
         agent_timeout_seconds: float = AGENT_TIMEOUT_SECONDS,
     ):
-        """Initialize the orchestrator with agents and configuration."""        self._queue: queue.Queue[Union[SentryTrigger, PhysicalTrigger] | None] = queue.Queue()
+        """Initialize the orchestrator with agents and configuration."""
+        self._queue: queue.Queue[Union[SentryTrigger, PhysicalTrigger] | None] = queue.Queue()
         self._active: dict[str, IncidentState] = {}
         self._known_ids: set[str] = set()
         self._known_types: set[str] = set()
