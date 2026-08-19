@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time mobile dashboard for Sentry-Swarm multi-agent DevOps incident response — monitor active incidents, pipeline progress, and resolution metrics.">
+  <meta name="theme-color" content="#0b0f19">
   <title>Sentry-Swarm Mobile Responder</title>
   <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -406,7 +408,7 @@
         <p>DevOps Mobile Responder</p>
       </div>
     </div>
-    <div id="connection-status" class="status-badge">
+    <div id="connection-status" class="status-badge" aria-label="Connection status">
       <div class="status-dot"></div>
       <span id="connection-text">Connecting</span>
     </div>
@@ -417,7 +419,7 @@
       <div class="section-title">
         <span>🚨</span> Active Incidents
       </div>
-      <div id="incidents">
+      <div id="incidents" role="region" aria-live="polite" aria-label="Active incidents">
         <div class="card empty-state">
           <div class="empty-icon">🛡️</div>
           <p>No active incidents. System is fully operational.</p>
