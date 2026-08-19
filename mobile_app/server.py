@@ -22,12 +22,18 @@ class MobileResponderHandler(http.server.BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        """Route GET requests to the SSE stream or static file handler."""
         if self.path == '/events':
             self.handle_sse()
         else:
             self.handle_static()
 
     def handle_sse(self):
+        """Stream server-sent events with active and resolved incident data.
+
+        Keeps the connection open, polling the snapshot files every second
+        and pushing a JSON payload only when the data has changed.
+        """
         self.send_response(200)
         self.send_header('Content-Type', 'text/event-stream')
         self.send_header('Cache-Control', 'no-cache')
@@ -81,6 +87,7 @@ class MobileResponderHandler(http.server.BaseHTTPRequestHandler):
                 break
 
     def handle_static(self):
+        """Serve static files from the mobile_app directory with path sanitisation."""
         # Normalize and sanitize path
         cleaned_path = self.path.split('?')[0].strip('/')
         if not cleaned_path or cleaned_path == '':
@@ -109,6 +116,14 @@ class MobileResponderHandler(http.server.BaseHTTPRequestHandler):
             mime_type = 'application/json; charset=utf-8'
         elif file_path.suffix == '.png':
             mime_type = 'image/png'
+        elif file_path.suffix == '.svg':
+            mime_type = 'image/svg+xml'
+        elif file_path.suffix == '.ico':
+            mime_type = 'image/x-icon'
+        elif file_path.suffix == '.webp':
+            mime_type = 'image/webp'
+        elif file_path.suffix == '.woff2':
+            mime_type = 'font/woff2'
 
         try:
             with open(file_path, 'rb') as f:
@@ -123,6 +138,7 @@ class MobileResponderHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500, f"Internal Server Error: {e}")
 
 def main():
+    """Start the threaded HTTP server for the mobile responder UI."""
     server_address = ('', PORT)
     try:
         httpd = ThreadingHTTPServer(server_address, MobileResponderHandler)
