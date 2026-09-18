@@ -3,7 +3,7 @@ import uuid
 import logging
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, List, Dict, Any
 
 from ingestion.buffer import get_error_rate, get_error_events, get_recent_events_mixed
 from agents.classifier import classify_events, ClassifierOutput
@@ -157,8 +157,38 @@ class SentryAgent:
     def handle_physical_event(self, raw_payload: str) -> None:
         """Entry point for UNO Q sensor data.
         The raw payload is expected to be a JSON string; we delegate
-        parsing to sensors.ingest_payload which returns a PhysicalTrigger.
+        parsing to sensors.ingest_payload which returns a PhysicalTrigger,
+        then convert it to SentryTrigger format for processing.
         """
         from sensors import ingest_payload
-        trigger = ingest_payload(raw_payload)
-        self.on_incident(trigger)
+        physical_trigger = ingest_payload(raw_payload)
+
+        # Convert PhysicalTrigger to SentryTrigger-compatible format
+        # Map physical trigger events to the expected dict format
+        trigger_events = []
+        if physical_trigger.trigger_events:
+            # PhysicalTrigger has trigger_events as list[str], convert to list[dict]
+            for i, event_str in enumerate(physical_trigger.trigger_events):
+                trigger_events.append({
+                    "timestamp": physical_trigger.detected_at.isoformat(),
+                    "level": "INFO",  # Default level for physical events
+                    "service": physical_trigger.source,
+                    "message": str(event_str),
+                    "incident_type": physical_trigger.incident_type,
+                    "raw": str(event_str)
+                })
+
+        # Create SentryTrigger with compatible fields
+        sentry_trigger = SentryTrigger(
+            incident_id=physical_trigger.incident_id,
+            incident_type=physical_trigger.incident_type,
+            severity=physical_trigger.severity,
+            affected_services=physical_trigger.affected_services or [],
+            confidence=physical_trigger.confidence,
+            summary=physical_trigger.summary,
+            trigger_events=trigger_events,
+            started_at=physical_trigger.started_at,
+            detected_at=physical_trigger.detected_at
+        )
+
+        self.on_incident(sentry_trigger)

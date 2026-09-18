@@ -139,6 +139,8 @@ class FixPlannerAgent:
 
             except Exception as e:
                 logger.warning("[fix_planner] LLM generation failed, falling back to local runbook parsing: %s", e)
+        else:
+            logger.warning("[fix_planner] GOOGLE_API_KEY not set, using local runbook parsing only")
 
         # Fallback to local markdown parsing (rule-based)
         remediation_steps = self._extract_section(
