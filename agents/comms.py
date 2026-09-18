@@ -153,6 +153,10 @@ _postmortem_chain = None
 def _get_chains():
     global _llm, _slack_chain, _postmortem_chain
     if _llm is None:
+        if not os.getenv("GOOGLE_API_KEY"):
+            logger.error("[comms] GOOGLE_API_KEY not set - LLM functionality will be unavailable")
+            # Return None chains to indicate LLM is not available
+            return None, None
         _llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.2)
         _slack_chain = slack_prompt | _llm | slack_parser
         _postmortem_chain = postmortem_prompt | _llm | postmortem_parser
@@ -162,12 +166,16 @@ def _get_chains():
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8), reraise=True)
 def _invoke_slack(payload: dict) -> SlackUpdate:
     slack_chain, _ = _get_chains()
+    if slack_chain is None:
+        raise RuntimeError("[comms] LLM chains not available - GOOGLE_API_KEY not set")
     return slack_chain.invoke(payload)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8), reraise=True)
 def _invoke_postmortem(payload: dict) -> PostMortem:
     _, postmortem_chain = _get_chains()
+    if postmortem_chain is None:
+        raise RuntimeError("[comms] LLM chains not available - GOOGLE_API_KEY not set")
     return postmortem_chain.invoke(payload)
 
 

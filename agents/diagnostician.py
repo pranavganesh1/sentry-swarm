@@ -130,6 +130,8 @@ class DiagnosticianAgent:
         """
         try:
             from ingestion.retriever import retrieve_relevant_runbook
+            # For now, keep using incident_type as both query and filter
+            # TODO: Consider using trigger summary or other context for better query text
             rb = retrieve_relevant_runbook(incident_type, incident_type)
             if rb and rb.get("path"):
                 return Path(rb["path"])
