@@ -108,3 +108,47 @@ validation.
 - **Watchdog thread** force-closes incidents stuck >3 minutes
 - **File-based command queue** (`commands.json`) lets the dashboards trigger
   manual resolve/cancel across process boundaries without a shared DB
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Setup
+
+1. Fork the repository
+2. Clone your fork locally
+3. Create a virtual environment: `python3 -m venv venv`
+4. Activate the virtual environment:
+   - Windows: `venv\Scripts\activate`
+   - Mac/Linux: `source venv/bin/activate`
+5. Install dependencies: `pip install -r requirements.txt`
+6. Set up environment variables: `cp .env.example .env` and add your GOOGLE_API_KEY
+7. Initialize the vector store: `python ingestion/embedder.py`
+
+### Making Changes
+
+1. Create a new branch for your feature: `git checkout -b feature/your-feature-name`
+2. Make your changes
+3. Ensure your code follows the existing style and conventions
+4. Add tests for any new functionality
+5. Run existing tests to ensure you haven't broken anything
+6. Commit your changes: `git commit -am "Add some feature"`
+7. Push to your fork: `git push origin feature/your-feature-name`
+8. Submit a Pull Request
+
+### Running Tests
+
+To run the test suite:
+
+```bash
+python -m pytest tests/
+```
+
+### Code Style
+
+Please follow the existing code style in the project. We use:
+- PEP 8 for Python style guidelines
+- Descriptive variable and function names
+- Comprehensive docstrings for public methods
+- Type hints where beneficial
+

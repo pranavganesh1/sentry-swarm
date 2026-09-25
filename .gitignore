@@ -6,3 +6,4 @@ logs/
 vectorstore/chroma/
 postmortems/*.md
 !postmortems/.gitkeep
+.aider*
