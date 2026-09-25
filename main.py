@@ -17,32 +17,42 @@ def configure_logging() -> None:
         datefmt="%H:%M:%S",
         handlers=[
             logging.FileHandler("logs/orchestrator.log", encoding="utf-8"),
+            logging.StreamHandler(sys.stdout)
         ],
     )
 
 
 def main() -> int:
-    # Run pre-flight checks
-    health_check.run_diagnostics()
+    try:
+        # Run pre-flight checks
+        health_check.run_diagnostics()
 
-    configure_logging()
-    orchestrator = IncidentOrchestrator()
+        configure_logging()
+        logger = logging.getLogger(__name__)
+        logger.info("Starting DevOps Incident Response System")
 
-    def shutdown(sig, frame) -> None:
-        orchestrator.stop()
-        sys.exit(0)
+        orchestrator = IncidentOrchestrator()
 
-    signal.signal(signal.SIGINT,  shutdown)
-    if hasattr(signal, "SIGTERM"):
-        signal.signal(signal.SIGTERM, shutdown)
+        def shutdown(sig, frame) -> None:
+            logger.info("Received shutdown signal, stopping orchestrator...")
+            orchestrator.stop()
+            sys.exit(0)
 
-    # start orchestrator in background thread
-    orchestrator.start()
+        signal.signal(signal.SIGINT,  shutdown)
+        if hasattr(signal, "SIGTERM"):
+            signal.signal(signal.SIGTERM, shutdown)
 
-    # run Rich dashboard on main thread (blocks until Ctrl+C)
-    dash.run_dashboard()
+        # start orchestrator in background thread
+        orchestrator.start()
+        logger.info("Orchestrator started successfully")
 
-    return 0
+        # run Rich dashboard on main thread (blocks until Ctrl+C)
+        dash.run_dashboard()
+
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to start system: {e}")
+        return 1
 
 
 if __name__ == "__main__":
