@@ -8,12 +8,22 @@ tenacity
 # Ingestion & Database
 watchdog
 chromadb
+sqlite3
 
 # Dashboards & UI
 rich
 streamlit
 pandas
 
+# Utilities & Helpers
+psutil
+colorama
+
 # Testing & Simulation
 faker
 pytest
+
+# Development Tools
+black
+flake8
+mypy
