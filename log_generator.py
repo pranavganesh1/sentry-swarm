@@ -1,5 +1,6 @@
 import random
 import time
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -65,8 +66,11 @@ def timestamp():
 
 def write_log(line):
     LOG_FILE.parent.mkdir(exist_ok=True)
-    with LOG_FILE.open("a", encoding="utf-8") as f:
-        f.write(f"[{timestamp()}] {line}\n")
+    try:
+        with LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(f"[{timestamp()}] {line}\n")
+    except Exception as e:
+        print(f"[generator] Error writing to log file: {e}", file=sys.stderr)
 
 
 def normal_traffic():
@@ -85,32 +89,39 @@ def run():
 
     print(f"[generator] Starting log generator -> {LOG_FILE}")
     print(f"[generator] Spike every {SPIKE_EVERY}s, lasting {SPIKE_DURATION}s")
+    print(f"[generator] Press Ctrl+C to stop")
 
     spike_at = time.time() + SPIKE_EVERY
     in_spike = False
     spike_end = 0
     current_spike = None
 
-    while True:
-        now = time.time()
+    try:
+        while True:
+            now = time.time()
 
-        if not in_spike and now >= spike_at:
-            current_spike = random.choice(list(SPIKE_TYPES.keys()))
-            in_spike = True
-            spike_end = now + SPIKE_DURATION
-            spike_at = now + SPIKE_EVERY
-            print(f"[generator] Spike started: {current_spike}")
+            if not in_spike and now >= spike_at:
+                current_spike = random.choice(list(SPIKE_TYPES.keys()))
+                in_spike = True
+                spike_end = now + SPIKE_DURATION
+                spike_at = now + SPIKE_EVERY
+                print(f"[generator] Spike started: {current_spike}")
 
-        if in_spike and now >= spike_end:
-            in_spike = False
-            print(f"[generator] Spike ended: {current_spike}")
+            if in_spike and now >= spike_end:
+                in_spike = False
+                print(f"[generator] Spike ended: {current_spike}")
 
-        if in_spike:
-            spike_traffic(current_spike)
-            time.sleep(0.1)
-        else:
-            normal_traffic()
-            time.sleep(NORMAL_INTERVAL)
+            if in_spike:
+                spike_traffic(current_spike)
+                time.sleep(0.1)
+            else:
+                normal_traffic()
+                time.sleep(NORMAL_INTERVAL)
+    except KeyboardInterrupt:
+        print(f"\n[generator] Stopping log generator...")
+    except Exception as e:
+        print(f"[generator] Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
