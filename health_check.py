@@ -131,10 +131,40 @@ def check_chromadb() -> bool:
 
     return True
 
+def check_system_resources() -> bool:
+    """Check basic system resources like memory and disk space.
+
+    Returns:
+        bool: True if system resources check passes, False otherwise
+    """
+    try:
+        import psutil
+        # Check memory usage
+        memory = psutil.virtual_memory()
+        if memory.percent > 90:
+            print(f"  {YELLOW}[ WARN ]{RESET} System Memory - High memory usage: {memory.percent}%")
+        else:
+            print(f"  {GREEN}[ OK ]{RESET} System Memory - Usage: {memory.percent}%")
+        
+        # Check disk space
+        disk = psutil.disk_usage('.')
+        if disk.percent > 90:
+            print(f"  {YELLOW}[ WARN ]{RESET} Disk Space - Low disk space: {disk.percent}% used")
+        else:
+            print(f"  {GREEN}[ OK ]{RESET} Disk Space - Usage: {disk.percent}%")
+            
+        return True
+    except ImportError:
+        print(f"  {YELLOW}[ WARN ]{RESET} System Resources - psutil not available, skipping resource checks")
+        return True
+    except Exception as e:
+        print(f"  {RED}[ FAIL ]{RESET} System Resources - Failed to check system resources: {e}")
+        return False
+
 def run_diagnostics() -> bool:
     """Run all pre-flight diagnostic checks and report results.
 
-    Executes environment, directory, database, and vector store checks.
+    Executes environment, directory, database, vector store, and system resource checks.
     Prints formatted results to console with color-coded status indicators.
 
     Returns:
@@ -149,6 +179,7 @@ def run_diagnostics() -> bool:
     success = check_directories() and success
     success = check_database() and success
     success = check_chromadb() and success
+    success = check_system_resources() and success
 
     print(f"{BOLD}=================================================={RESET}")
     if success:
