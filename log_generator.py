@@ -27,31 +27,32 @@ NORMAL_TEMPLATES = [
     lambda: f"INFO  [{svc()}] Cache hit for key session:{fake.uuid4()[:8]}",
 ]
 
+# Spike templates for different incident types
 SPIKE_TYPES = {
-    "http_5xx": [
+    "http_5xx": [  # HTTP 5xx errors and exceptions
         lambda: f"ERROR [{svc()}] GET /api/{fake.uri_page()} 500 Internal Server Error",
         lambda: f"ERROR [{svc()}] POST /api/{fake.uri_page()} 503 Service Unavailable",
         lambda: f"ERROR [{svc()}] Unhandled exception: NullPointerException at line {random.randint(100, 800)}",
     ],
-    "db_timeout": [
+    "db_timeout": [  # Database connection issues
         lambda: "ERROR [db-proxy] Connection timeout after 30000ms",
         lambda: "ERROR [db-proxy] Query exceeded max execution time: SELECT * FROM orders WHERE...",
         lambda: f"WARN  [db-proxy] Connection pool exhausted ({random.randint(50, 100)}/50 connections used)",
         lambda: "ERROR [user-api] Failed to fetch user data: upstream db-proxy timeout",
     ],
-    "oom_kill": [
+    "oom_kill": [  # Out of memory conditions
         lambda: "FATAL [payment-service] OutOfMemoryError: Java heap space",
         lambda: f"ERROR [payment-service] Process killed by OOM killer (RSS: {random.randint(900, 1200)}MB)",
         lambda: f"WARN  [payment-service] Memory usage at {random.randint(85, 99)}% - approaching limit",
         lambda: "ERROR [nginx] upstream payment-service unavailable (connection refused)",
     ],
-    "failed_deploy": [
+    "failed_deploy": [  # Deployment failures
         lambda: "ERROR [auth-service] Deploy pipeline failed: exit code 1",
         lambda: f"ERROR [auth-service] Pod in CrashLoopBackOff ({random.randint(3, 8)} restarts)",
         lambda: "ERROR [auth-service] Health check returned 503 after deploy",
         lambda: "WARN  [nginx] upstream auth-service unavailable (0 ready replicas)",
     ],
-    "cascading_failure": [
+    "cascading_failure": [  # Cascading failures due to dependencies
         lambda: f"ERROR [{svc()}] Connection refused: upstream auth-service unavailable",
         lambda: f"FATAL [{svc()}] Circuit breaker OPEN for auth-service",
         lambda: f"ERROR [{svc()}] Failed to authenticate request: upstream timeout",
