@@ -74,14 +74,11 @@ def write_log(line):
 
 
 def normal_traffic():
-    template = random.choice(NORMAL_TEMPLATES)
-    write_log(template())
+    write_log(random.choice(NORMAL_TEMPLATES)())
 
 
 def spike_traffic(spike_type):
-    templates = SPIKE_TYPES[spike_type]
-    template = random.choice(templates)
-    write_log(template())
+    write_log(random.choice(SPIKE_TYPES[spike_type])())
 
 
 def run():
