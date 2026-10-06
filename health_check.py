@@ -131,6 +131,14 @@ def check_chromadb() -> bool:
 
     return True
 
+def _print_resource_check(label: str, value: float, high_threshold: float = 90.0) -> None:
+    """Helper to print resource check results with color coding."""
+    if value > high_threshold:
+        print(f"  {YELLOW}[ WARN ]{RESET} {label} - High usage: {value}%")
+    else:
+        print(f"  {GREEN}[ OK ]{RESET} {label} - Usage: {value}%")
+
+
 def check_system_resources() -> bool:
     """Check basic system resources like memory and disk space.
 
@@ -141,18 +149,12 @@ def check_system_resources() -> bool:
         import psutil
         # Check memory usage
         memory = psutil.virtual_memory()
-        if memory.percent > 90:
-            print(f"  {YELLOW}[ WARN ]{RESET} System Memory - High memory usage: {memory.percent}%")
-        else:
-            print(f"  {GREEN}[ OK ]{RESET} System Memory - Usage: {memory.percent}%")
-        
+        _print_resource_check("System Memory", memory.percent)
+
         # Check disk space
         disk = psutil.disk_usage('.')
-        if disk.percent > 90:
-            print(f"  {YELLOW}[ WARN ]{RESET} Disk Space - Low disk space: {disk.percent}% used")
-        else:
-            print(f"  {GREEN}[ OK ]{RESET} Disk Space - Usage: {disk.percent}%")
-            
+        _print_resource_check("Disk Space", disk.percent)
+
         return True
     except ImportError:
         print(f"  {YELLOW}[ WARN ]{RESET} System Resources - psutil not available, skipping resource checks")
